@@ -1,0 +1,51 @@
+# Define Constants
+API_KEY = "your_api_key"
+API_SECRET = "your_api_secret"
+SYMBOL = "MDTUSDT"
+USDT = 12
+BUY_THRESHOLD = 0.02
+STOP_LOSS_THRESHOLD = 0.01
+TAKE_PROFIT_THRESHOLD = 0.04
+
+# Initialize Binance client
+client = BinanceClient(API_KEY, API_SECRET)
+
+# Fetch historical Kline data
+klines = client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=300)
+
+# Extract closing prices
+closing_prices = [float(entry[4]) for entry in klines]
+
+# Calculate percentage change from the previous close
+percentage_changes = [(price / closing_prices[i - 1] - 1) for i, price in enumerate(closing_prices)][1:]
+
+# Main Trading Logic
+in_trade = False
+entry_price = 0.0
+
+for i, percentage_change in enumerate(percentage_changes):
+    if not in_trade and percentage_change <= -BUY_THRESHOLD:
+        # Buy Signal
+        capital_to_allocate = USDT
+        buy_quantity = (capital_to_allocate * asset_balance) / entry_price
+        buy_quantity = round(buy_quantity, 1)
+        entry_price = closing_prices[i]
+        in_trade = True
+        place_buy_order(client, SYMBOL, buy_quantity, closing_prices[i])
+
+    if in_trade:
+        asset_to_sell = "MDT"
+        asset_balance = get_asset_balance(client, asset_to_sell)
+        
+        if percentage_change <= -STOP_LOSS_THRESHOLD:
+            # Stop Loss
+            place_sell_order(client, SYMBOL, asset_balance, closing_prices[i])
+            in_trade = False
+
+        elif percentage_change >= TAKE_PROFIT_THRESHOLD:
+            # Take Profit
+            place_sell_order(client, SYMBOL, asset_balance, closing_prices[i])
+            in_trade = False
+
+    # Delay to avoid frequent API requests
+    sleep(302)
